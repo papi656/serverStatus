@@ -24,7 +24,9 @@ pub fn scan(roots: &[String], depth: usize, top_n: usize) -> DiskSpace {
             if !entry.file_type().is_file() {
                 continue;
             }
-            let Ok(metadata) = entry.metadata() else { continue };
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
             let size = metadata.len();
 
             if top_files.len() < top_n {
@@ -42,8 +44,10 @@ pub fn scan(roots: &[String], depth: usize, top_n: usize) -> DiskSpace {
         }
     }
 
-    let mut top_dirs: Vec<DiskItem> =
-        dir_sizes.into_iter().map(|(path, bytes)| DiskItem { path, bytes }).collect();
+    let mut top_dirs: Vec<DiskItem> = dir_sizes
+        .into_iter()
+        .map(|(path, bytes)| DiskItem { path, bytes })
+        .collect();
     top_dirs.sort_by(|a, b| b.bytes.cmp(&a.bytes).then(a.path.cmp(&b.path)));
     top_dirs.truncate(top_n);
 
@@ -54,7 +58,10 @@ pub fn scan(roots: &[String], depth: usize, top_n: usize) -> DiskSpace {
     top_files.sort_by(|a, b| b.bytes.cmp(&a.bytes).then(a.path.cmp(&b.path)));
 
     DiskSpace {
-        scanned_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+        scanned_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
         roots: roots.to_vec(),
         top_dirs,
         top_files,
@@ -108,11 +115,22 @@ mod tests {
 
         let scan_result = scan(&[root.display().to_string()], 2, 10);
 
-        let lib = scan_result.top_dirs.iter().find(|d| d.path.ends_with("var/lib")).unwrap();
+        let lib = scan_result
+            .top_dirs
+            .iter()
+            .find(|d| d.path.ends_with("var/lib"))
+            .unwrap();
         assert_eq!(lib.bytes, 11_000);
-        let log = scan_result.top_dirs.iter().find(|d| d.path.ends_with("var/log")).unwrap();
+        let log = scan_result
+            .top_dirs
+            .iter()
+            .find(|d| d.path.ends_with("var/log"))
+            .unwrap();
         assert_eq!(log.bytes, 5_000);
-        assert!(!scan_result.top_dirs.iter().any(|d| d.path.ends_with("top.txt")));
+        assert!(!scan_result
+            .top_dirs
+            .iter()
+            .any(|d| d.path.ends_with("top.txt")));
         assert_eq!(scan_result.top_files[0].bytes, 10_000);
         assert!(scan_result.top_files[0].path.ends_with("big.bin"));
         assert_eq!(scan_result.top_files.len(), 4);
@@ -123,7 +141,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         for i in 0..15 {
-            std::fs::write(root.join(format!("f{i}.bin")), vec![0u8; (i as usize + 1) * 100]).unwrap();
+            std::fs::write(
+                root.join(format!("f{i}.bin")),
+                vec![0u8; (i as usize + 1) * 100],
+            )
+            .unwrap();
         }
         let scan_result = scan(&[root.display().to_string()], 2, 10);
         assert_eq!(scan_result.top_files.len(), 10);

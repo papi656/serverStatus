@@ -20,7 +20,12 @@ impl Config {
         let disk_scan_interval_secs = parse_or(&lookup, "DISK_SCAN_INTERVAL_SECS", 43_200)?;
         let disk_scan_depth = parse_or(&lookup, "DISK_SCAN_DEPTH", 2)?;
         let disk_scan_roots = lookup("DISK_SCAN_ROOTS")
-            .map(|s| s.split(',').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect())
+            .map(|s| {
+                s.split(',')
+                    .map(|p| p.trim().to_string())
+                    .filter(|p| !p.is_empty())
+                    .collect()
+            })
             .unwrap_or_else(|| vec!["/".to_string()]);
         let hostname = lookup("HOSTNAME")
             .or_else(|| std::fs::read_to_string("/proc/sys/kernel/hostname").ok())
@@ -52,7 +57,9 @@ fn parse_or<T: std::str::FromStr>(
 ) -> Result<T, String> {
     match lookup(key) {
         None => Ok(default),
-        Some(v) => v.parse::<T>().map_err(|_| format!("{key} has invalid value: {v}")),
+        Some(v) => v
+            .parse::<T>()
+            .map_err(|_| format!("{key} has invalid value: {v}")),
     }
 }
 
@@ -62,8 +69,10 @@ mod tests {
     use std::collections::HashMap;
 
     fn lookup_from(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
-        let map: HashMap<String, String> =
-            pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let map: HashMap<String, String> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         move |key: &str| map.get(key).cloned()
     }
 
@@ -102,13 +111,17 @@ mod tests {
         assert_eq!(cfg.top_n, 5);
         assert_eq!(cfg.disk_scan_interval_secs, 3600);
         assert_eq!(cfg.disk_scan_depth, 3);
-        assert_eq!(cfg.disk_scan_roots, vec!["/var".to_string(), "/home".to_string()]);
+        assert_eq!(
+            cfg.disk_scan_roots,
+            vec!["/var".to_string(), "/home".to_string()]
+        );
         assert_eq!(cfg.hostname, "custom");
     }
 
     #[test]
     fn rejects_invalid_integer() {
-        let err = Config::from_lookup(lookup_from(&[("TOKEN", "abc"), ("TOP_N", "lots")])).unwrap_err();
+        let err =
+            Config::from_lookup(lookup_from(&[("TOKEN", "abc"), ("TOP_N", "lots")])).unwrap_err();
         assert!(err.contains("TOP_N"));
     }
 }

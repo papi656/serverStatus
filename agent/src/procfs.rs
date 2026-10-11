@@ -13,9 +13,18 @@ pub fn parse_cpu_stat(content: &str) -> (CpuTimes, Vec<CpuTimes>) {
     let mut aggregate = CpuTimes { idle: 0, total: 0 };
     let mut cores = Vec::new();
     for line in content.lines() {
-        let Some(rest) = line.strip_prefix("cpu") else { continue };
-        let is_core = rest.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false);
-        let mut values: Vec<u64> = rest.split_whitespace().filter_map(|t| t.parse().ok()).collect();
+        let Some(rest) = line.strip_prefix("cpu") else {
+            continue;
+        };
+        let is_core = rest
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false);
+        let mut values: Vec<u64> = rest
+            .split_whitespace()
+            .filter_map(|t| t.parse().ok())
+            .collect();
         if is_core {
             // Core lines are `cpuN ...`; drop the leading core index.
             values.remove(0);
@@ -75,7 +84,11 @@ pub fn parse_meminfo(content: &str) -> Mem {
 
 /// Parse `/proc/loadavg` into 1/5/15-minute load averages.
 pub fn parse_loadavg(content: &str) -> [f64; 3] {
-    let vals: Vec<f64> = content.split_whitespace().take(3).filter_map(|t| t.parse().ok()).collect();
+    let vals: Vec<f64> = content
+        .split_whitespace()
+        .take(3)
+        .filter_map(|t| t.parse().ok())
+        .collect();
     [
         vals.first().copied().unwrap_or(0.0),
         vals.get(1).copied().unwrap_or(0.0),
@@ -85,7 +98,11 @@ pub fn parse_loadavg(content: &str) -> [f64; 3] {
 
 /// Parse the first field of `/proc/uptime` (seconds, truncated to u64).
 pub fn parse_uptime(content: &str) -> u64 {
-    content.split_whitespace().next().and_then(|t| t.parse::<f64>().ok()).unwrap_or(0.0) as u64
+    content
+        .split_whitespace()
+        .next()
+        .and_then(|t| t.parse::<f64>().ok())
+        .unwrap_or(0.0) as u64
 }
 
 /// Parse `/proc/net/dev`; sums all interfaces except loopback.
@@ -93,7 +110,9 @@ pub fn parse_netdev(content: &str) -> Net {
     let mut rx_bytes = 0u64;
     let mut tx_bytes = 0u64;
     for line in content.lines() {
-        let Some((iface, rest)) = line.split_once(':') else { continue };
+        let Some((iface, rest)) = line.split_once(':') else {
+            continue;
+        };
         if iface.trim() == "lo" {
             continue;
         }
@@ -125,7 +144,10 @@ pub fn parse_diskstats(content: &str) -> DiskIo {
         read_bytes += sectors_read * 512;
         write_bytes += sectors_written * 512;
     }
-    DiskIo { read_bytes, write_bytes }
+    DiskIo {
+        read_bytes,
+        write_bytes,
+    }
 }
 
 /// Parse `/proc/mounts`; keeps mount points whose source is a real block device.
@@ -161,7 +183,11 @@ pub fn parse_proc_stat(content: &str) -> Option<(String, u64)> {
 pub fn parse_status_rss(content: &str) -> u64 {
     for line in content.lines() {
         if let Some(rest) = line.strip_prefix("VmRSS:") {
-            let kb: u64 = rest.split_whitespace().next().and_then(|v| v.parse().ok()).unwrap_or(0);
+            let kb: u64 = rest
+                .split_whitespace()
+                .next()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
             return kb * 1024;
         }
     }
@@ -215,8 +241,14 @@ SwapFree:        1048576 kB
 
     #[test]
     fn computes_cpu_percentage() {
-        let prev = CpuTimes { idle: 100, total: 200 };
-        let cur = CpuTimes { idle: 120, total: 300 };
+        let prev = CpuTimes {
+            idle: 100,
+            total: 200,
+        };
+        let cur = CpuTimes {
+            idle: 120,
+            total: 300,
+        };
         // 100 total ticks elapsed, 20 idle => 80% busy
         assert!((cpu_pct(&prev, &cur) - 80.0).abs() < 1e-9);
         assert_eq!(cpu_pct(&prev, &prev), 0.0);
@@ -234,7 +266,10 @@ SwapFree:        1048576 kB
 
     #[test]
     fn parses_loadavg_and_uptime() {
-        assert_eq!(parse_loadavg("0.42 0.55 0.61 1/234 5678"), [0.42, 0.55, 0.61]);
+        assert_eq!(
+            parse_loadavg("0.42 0.55 0.61 1/234 5678"),
+            [0.42, 0.55, 0.61]
+        );
         assert_eq!(parse_uptime("812345.67 1234567.89"), 812_345);
     }
 
@@ -276,7 +311,10 @@ tmpfs /run tmpfs rw 0 0
 
     #[test]
     fn parses_only_block_device_mounts() {
-        assert_eq!(parse_mounts(MOUNTS), vec!["/".to_string(), "/data".to_string()]);
+        assert_eq!(
+            parse_mounts(MOUNTS),
+            vec!["/".to_string(), "/data".to_string()]
+        );
     }
 
     #[test]

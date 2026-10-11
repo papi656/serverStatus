@@ -90,7 +90,10 @@ mod tests {
             hostname: "vps-1".into(),
             uptime_s: 812_345,
             load: [0.42, 0.55, 0.61],
-            cpu: Cpu { total_pct: 12.3, per_core_pct: vec![10.1, 15.0] },
+            cpu: Cpu {
+                total_pct: 12.3,
+                per_core_pct: vec![10.1, 15.0],
+            },
             mem: Mem {
                 total: 8_589_934_592,
                 used: 3_221_225_472,
@@ -98,19 +101,45 @@ mod tests {
                 swap_total: 0,
                 swap_used: 0,
             },
-            disks: vec![DiskUsage { mount: "/".into(), total: 53_687_091_200, used: 21_474_836_480 }],
-            net: Net { rx_bytes: 123_456_789, tx_bytes: 987_654_321 },
-            diskio: DiskIo { read_bytes: 55_555_555, write_bytes: 44_444_444 },
+            disks: vec![DiskUsage {
+                mount: "/".into(),
+                total: 53_687_091_200,
+                used: 21_474_836_480,
+            }],
+            net: Net {
+                rx_bytes: 123_456_789,
+                tx_bytes: 987_654_321,
+            },
+            diskio: DiskIo {
+                read_bytes: 55_555_555,
+                write_bytes: 44_444_444,
+            },
             disk_space: DiskSpace {
                 scanned_at: 1_729_996_000,
                 roots: vec!["/".into()],
-                top_dirs: vec![DiskItem { path: "/var/lib".into(), bytes: 21_474_836_480 }],
-                top_files: vec![DiskItem { path: "/var/log/syslog".into(), bytes: 5_368_709_120 }],
+                top_dirs: vec![DiskItem {
+                    path: "/var/lib".into(),
+                    bytes: 21_474_836_480,
+                }],
+                top_files: vec![DiskItem {
+                    path: "/var/log/syslog".into(),
+                    bytes: 5_368_709_120,
+                }],
             },
             processes: Processes {
                 count: 132,
-                top_cpu: vec![ProcessEntry { pid: 812, name: "postgres".into(), cpu_pct: 4.1, mem_pct: 22.4 }],
-                top_mem: vec![ProcessEntry { pid: 812, name: "postgres".into(), cpu_pct: 4.1, mem_pct: 22.4 }],
+                top_cpu: vec![ProcessEntry {
+                    pid: 812,
+                    name: "postgres".into(),
+                    cpu_pct: 4.1,
+                    mem_pct: 22.4,
+                }],
+                top_mem: vec![ProcessEntry {
+                    pid: 812,
+                    name: "postgres".into(),
+                    cpu_pct: 4.1,
+                    mem_pct: 22.4,
+                }],
             },
         }
     }
@@ -127,8 +156,17 @@ mod tests {
     fn serializes_expected_top_level_keys() {
         let json = serde_json::to_string(&sample()).unwrap();
         for key in [
-            "\"ts\"", "\"hostname\"", "\"uptime_s\"", "\"load\"", "\"cpu\"", "\"mem\"",
-            "\"disks\"", "\"net\"", "\"diskio\"", "\"disk_space\"", "\"processes\"",
+            "\"ts\"",
+            "\"hostname\"",
+            "\"uptime_s\"",
+            "\"load\"",
+            "\"cpu\"",
+            "\"mem\"",
+            "\"disks\"",
+            "\"net\"",
+            "\"diskio\"",
+            "\"disk_space\"",
+            "\"processes\"",
         ] {
             assert!(json.contains(key), "missing key {key}");
         }

@@ -23,17 +23,30 @@ pub struct RawProc {
 /// Read every process under `proc_root` (usually `/proc`).
 pub fn read_processes(proc_root: &str) -> Vec<RawProc> {
     let mut processes = Vec::new();
-    let Ok(dir) = std::fs::read_dir(proc_root) else { return processes };
+    let Ok(dir) = std::fs::read_dir(proc_root) else {
+        return processes;
+    };
     for entry in dir.flatten() {
         let file_name = entry.file_name();
-        let Some(pid) = file_name.to_str().and_then(|s| s.parse::<i32>().ok()) else { continue };
+        let Some(pid) = file_name.to_str().and_then(|s| s.parse::<i32>().ok()) else {
+            continue;
+        };
         let base = entry.path();
-        let Ok(stat) = std::fs::read_to_string(base.join("stat")) else { continue };
-        let Some((name, jiffies)) = parse_proc_stat(&stat) else { continue };
+        let Ok(stat) = std::fs::read_to_string(base.join("stat")) else {
+            continue;
+        };
+        let Some((name, jiffies)) = parse_proc_stat(&stat) else {
+            continue;
+        };
         let rss_bytes = std::fs::read_to_string(base.join("status"))
             .map(|s| parse_status_rss(&s))
             .unwrap_or(0);
-        processes.push(RawProc { pid, name, jiffies, rss_bytes });
+        processes.push(RawProc {
+            pid,
+            name,
+            jiffies,
+            rss_bytes,
+        });
     }
     processes
 }
@@ -63,7 +76,12 @@ pub fn compute_entries(
             } else {
                 0.0
             };
-            ProcessEntry { pid: p.pid, name: p.name.clone(), cpu_pct, mem_pct }
+            ProcessEntry {
+                pid: p.pid,
+                name: p.name.clone(),
+                cpu_pct,
+                mem_pct,
+            }
         })
         .collect()
 }
@@ -104,8 +122,15 @@ impl Collector {
     pub fn new() -> Self {
         let stat = fs::read_to_string("/proc/stat").unwrap_or_default();
         let (prev_cpu, prev_cores) = parse_cpu_stat(&stat);
-        let prev_proc = read_processes("/proc").into_iter().map(|p| (p.pid, p.jiffies)).collect();
-        Self { prev_cpu, prev_cores, prev_proc }
+        let prev_proc = read_processes("/proc")
+            .into_iter()
+            .map(|p| (p.pid, p.jiffies))
+            .collect();
+        Self {
+            prev_cpu,
+            prev_cores,
+            prev_proc,
+        }
     }
 
     /// Collect one snapshot, using `disk_space` as the most recent disk scan.
@@ -116,8 +141,11 @@ impl Collector {
         let prev_cores = std::mem::replace(&mut self.prev_cores, cur_cores);
 
         let total_pct = cpu_pct(&prev_cpu, &self.prev_cpu);
-        let per_core_pct =
-            prev_cores.iter().zip(self.prev_cores.iter()).map(|(p, c)| cpu_pct(p, c)).collect();
+        let per_core_pct = prev_cores
+            .iter()
+            .zip(self.prev_cores.iter())
+            .map(|(p, c)| cpu_pct(p, c))
+            .collect();
         let ncpu = self.prev_cores.len().max(1);
         let total_delta = self.prev_cpu.total.saturating_sub(prev_cpu.total);
 
@@ -129,7 +157,11 @@ impl Collector {
         let disks = mount_points
             .iter()
             .filter_map(|mount| {
-                disk_usage(mount).map(|(total, used)| DiskUsage { mount: mount.clone(), total, used })
+                disk_usage(mount).map(|(total, used)| DiskUsage {
+                    mount: mount.clone(),
+                    total,
+                    used,
+                })
             })
             .collect();
 
@@ -144,17 +176,27 @@ impl Collector {
         self.prev_proc = raws.into_iter().map(|p| (p.pid, p.jiffies)).collect();
 
         Snapshot {
-            ts: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            ts: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             hostname: config.hostname.clone(),
             uptime_s,
             load,
-            cpu: Cpu { total_pct, per_core_pct },
+            cpu: Cpu {
+                total_pct,
+                per_core_pct,
+            },
             mem,
             disks,
             net,
             diskio,
             disk_space,
-            processes: Processes { count, top_cpu, top_mem },
+            processes: Processes {
+                count,
+                top_cpu,
+                top_mem,
+            },
         }
     }
 }
@@ -170,7 +212,12 @@ mod tests {
     use super::*;
 
     fn raw(pid: i32, jiffies: u64, rss_bytes: u64) -> RawProc {
-        RawProc { pid, name: format!("p{pid}"), jiffies, rss_bytes }
+        RawProc {
+            pid,
+            name: format!("p{pid}"),
+            jiffies,
+            rss_bytes,
+        }
     }
 
     #[test]
@@ -199,9 +246,24 @@ mod tests {
     #[test]
     fn truncates_to_n() {
         let entries = vec![
-            ProcessEntry { pid: 1, name: "a".into(), cpu_pct: 3.0, mem_pct: 1.0 },
-            ProcessEntry { pid: 2, name: "b".into(), cpu_pct: 2.0, mem_pct: 2.0 },
-            ProcessEntry { pid: 3, name: "c".into(), cpu_pct: 1.0, mem_pct: 3.0 },
+            ProcessEntry {
+                pid: 1,
+                name: "a".into(),
+                cpu_pct: 3.0,
+                mem_pct: 1.0,
+            },
+            ProcessEntry {
+                pid: 2,
+                name: "b".into(),
+                cpu_pct: 2.0,
+                mem_pct: 2.0,
+            },
+            ProcessEntry {
+                pid: 3,
+                name: "c".into(),
+                cpu_pct: 1.0,
+                mem_pct: 3.0,
+            },
         ];
         assert_eq!(top_by_cpu(&entries, 2).len(), 2);
         assert_eq!(top_by_cpu(&entries, 2)[1].pid, 2);
