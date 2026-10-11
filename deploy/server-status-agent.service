@@ -1,0 +1,18 @@
+[Unit]
+Description=Server status agent (collects VPS metrics and pushes to the dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=serverstatus
+Group=serverstatus
+EnvironmentFile=/etc/server-status-agent.env
+ExecStart=/usr/local/bin/server-status-agent
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
