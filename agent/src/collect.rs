@@ -1,10 +1,16 @@
 //! Process enumeration and top-N ranking.
 
 use std::collections::HashMap;
+use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use shared::ProcessEntry;
+use shared::{Cpu, DiskSpace, DiskUsage, ProcessEntry, Processes, Snapshot};
 
-use crate::procfs::{parse_proc_stat, parse_status_rss};
+use crate::config::Config;
+use crate::procfs::{
+    cpu_pct, disk_usage, parse_cpu_stat, parse_diskstats, parse_loadavg, parse_meminfo,
+    parse_mounts, parse_netdev, parse_proc_stat, parse_status_rss, parse_uptime, CpuTimes,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawProc {
@@ -84,6 +90,79 @@ pub fn top_by_mem(entries: &[ProcessEntry], n: usize) -> Vec<ProcessEntry> {
     });
     sorted.truncate(n);
     sorted
+}
+
+/// Holds the previous sample state needed to compute CPU deltas.
+pub struct Collector {
+    prev_cpu: CpuTimes,
+    prev_cores: Vec<CpuTimes>,
+    prev_proc: HashMap<i32, u64>,
+}
+
+impl Collector {
+    /// Read the baseline CPU and process state. Call once before the first `collect`.
+    pub fn new() -> Self {
+        let stat = fs::read_to_string("/proc/stat").unwrap_or_default();
+        let (prev_cpu, prev_cores) = parse_cpu_stat(&stat);
+        let prev_proc = read_processes("/proc").into_iter().map(|p| (p.pid, p.jiffies)).collect();
+        Self { prev_cpu, prev_cores, prev_proc }
+    }
+
+    /// Collect one snapshot, using `disk_space` as the most recent disk scan.
+    pub fn collect(&mut self, config: &Config, disk_space: DiskSpace) -> Snapshot {
+        let stat = fs::read_to_string("/proc/stat").unwrap_or_default();
+        let (cur_cpu, cur_cores) = parse_cpu_stat(&stat);
+        let prev_cpu = std::mem::replace(&mut self.prev_cpu, cur_cpu);
+        let prev_cores = std::mem::replace(&mut self.prev_cores, cur_cores);
+
+        let total_pct = cpu_pct(&prev_cpu, &self.prev_cpu);
+        let per_core_pct =
+            prev_cores.iter().zip(self.prev_cores.iter()).map(|(p, c)| cpu_pct(p, c)).collect();
+        let ncpu = self.prev_cores.len().max(1);
+        let total_delta = self.prev_cpu.total.saturating_sub(prev_cpu.total);
+
+        let mem = parse_meminfo(&fs::read_to_string("/proc/meminfo").unwrap_or_default());
+        let load = parse_loadavg(&fs::read_to_string("/proc/loadavg").unwrap_or_default());
+        let uptime_s = parse_uptime(&fs::read_to_string("/proc/uptime").unwrap_or_default());
+
+        let mount_points = parse_mounts(&fs::read_to_string("/proc/mounts").unwrap_or_default());
+        let disks = mount_points
+            .iter()
+            .filter_map(|mount| {
+                disk_usage(mount).map(|(total, used)| DiskUsage { mount: mount.clone(), total, used })
+            })
+            .collect();
+
+        let net = parse_netdev(&fs::read_to_string("/proc/net/dev").unwrap_or_default());
+        let diskio = parse_diskstats(&fs::read_to_string("/proc/diskstats").unwrap_or_default());
+
+        let raws = read_processes("/proc");
+        let entries = compute_entries(&raws, &self.prev_proc, total_delta, ncpu, mem.total);
+        let count = raws.len();
+        let top_cpu = top_by_cpu(&entries, config.top_n);
+        let top_mem = top_by_mem(&entries, config.top_n);
+        self.prev_proc = raws.into_iter().map(|p| (p.pid, p.jiffies)).collect();
+
+        Snapshot {
+            ts: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            hostname: config.hostname.clone(),
+            uptime_s,
+            load,
+            cpu: Cpu { total_pct, per_core_pct },
+            mem,
+            disks,
+            net,
+            diskio,
+            disk_space,
+            processes: Processes { count, top_cpu, top_mem },
+        }
+    }
+}
+
+impl Default for Collector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
