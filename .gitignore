@@ -1,0 +1,6 @@
+# Design docs are kept local only, never committed to this repository
+docs/
+
+# Rust
+/target
+**/*.rs.bk
