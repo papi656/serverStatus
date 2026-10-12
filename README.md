@@ -225,7 +225,7 @@ All configuration is via environment variables (the systemd unit loads them from
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `ENDPOINT` | Ingest URL to POST snapshots to | `http://127.0.0.1:8099/ingest` |
+| `ENDPOINT` | Ingest URL to POST snapshots to (runtime-configurable) | `http://127.0.0.1:8099/ingest` |
 | `TOKEN` | Bearer token sent as `Authorization: Bearer <TOKEN>` | **required** |
 | `INTERVAL_SECS` | Seconds between snapshots | `60` |
 | `TOP_N` | Processes per top list | `10` |
@@ -233,6 +233,23 @@ All configuration is via environment variables (the systemd unit loads them from
 | `DISK_SCAN_DEPTH` | Directory depth for the top-dirs list | `2` |
 | `DISK_SCAN_ROOTS` | Comma-separated roots to scan | `/` |
 | `HOSTNAME` | Hostname reported in the payload | OS hostname |
+
+### Changing the endpoint (no rebuild)
+
+`ENDPOINT` and every other setting are read from the environment **when the process starts**
+— none of them are compiled into the binary (only the default value above is). To point the
+agent at a different ingest URL, edit the env file and restart:
+
+```bash
+sudo nano /etc/server-status-agent.env     # change the ENDPOINT= line
+sudo systemctl restart server-status-agent
+```
+
+Or override it for a single manual run, without touching the file:
+
+```bash
+TOKEN=... ENDPOINT=http://127.0.0.1:9000/ingest ./server-status-agent --once
+```
 
 > **HTTP only.** This build disables TLS (the agent talks to the dashboard over loopback),
 > so `ENDPOINT` must be a plain `http://` URL. An `https://` endpoint will fail.
