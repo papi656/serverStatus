@@ -43,31 +43,35 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 . "$HOME/.cargo/env"
 ```
 
-### Build a static Linux binary (cross-compiled from macOS or Linux)
+### Build a static Linux binary
+
+> **Building from a Mac?** A plain `cargo build` fails: the musl target needs an ELF
+> linker, and Apple's `clang` can't link ELF. The command below points Cargo at
+> `rust-lld`, which ships with Rust — no extra toolchain to install.
 
 ```bash
-# Add the static Linux target once
+# Add the static Linux target once (x86_64 = most VPS; use
+# aarch64-unknown-linux-musl for ARM64 hosts)
 rustup target add x86_64-unknown-linux-musl
 
-# Build the agent
-cargo build --release --target x86_64-unknown-linux-musl -p server-status-agent
+# Locate the rust-lld linker shipped with the Rust toolchain
+RUST_LLD="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/rust-lld"
 
-# Strip debug symbols to shrink it
-strip target/x86_64-unknown-linux-musl/release/server-status-agent
+# Build (statically linked, stripped)
+CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER="$RUST_LLD" \
+  RUSTFLAGS="-C strip=symbols" \
+  cargo build --release --target x86_64-unknown-linux-musl -p server-status-agent
 ```
 
-The output is:
+The output is a ~1 MB statically linked binary:
 
 ```
 target/x86_64-unknown-linux-musl/release/server-status-agent
 ```
 
-### Build a normal binary (if you build on the same Linux machine)
-
-```bash
-cargo build --release -p server-status-agent
-strip target/release/server-status-agent
-```
+> **Building on Linux instead?** With `musl-tools` installed (giving you
+> `x86_64-linux-musl-gcc`) you can drop the linker line. Building for the same machine
+> (glibc) is just `cargo build --release -p server-status-agent`.
 
 > **Do not build on a small VPS.** A release Rust link can peak at 1-2 GB of RAM. Build on
 > your workstation (or CI) and copy the finished binary over.
@@ -229,6 +233,9 @@ All configuration is via environment variables (the systemd unit loads them from
 | `DISK_SCAN_DEPTH` | Directory depth for the top-dirs list | `2` |
 | `DISK_SCAN_ROOTS` | Comma-separated roots to scan | `/` |
 | `HOSTNAME` | Hostname reported in the payload | OS hostname |
+
+> **HTTP only.** This build disables TLS (the agent talks to the dashboard over loopback),
+> so `ENDPOINT` must be a plain `http://` URL. An `https://` endpoint will fail.
 
 ## 6. The ingest contract
 
