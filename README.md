@@ -109,26 +109,34 @@ EOF
 sudo chmod 0600 /etc/server-status-agent.env
 ```
 
-### 3c. Install the systemd unit
+### 3c. Install the systemd unit and logrotate config
 
-Copy [`deploy/server-status-agent.service`](deploy/server-status-agent.service) to the
-server and install it:
+Copy the unit and logrotate config from [`deploy/`](deploy/) and install them:
 
 ```bash
 sudo install -m 0644 deploy/server-status-agent.service /etc/systemd/system/
+sudo install -m 0644 deploy/logrotate-server-status-agent /etc/logrotate.d/server-status-agent
 sudo systemctl daemon-reload
 sudo systemctl enable --now server-status-agent
 ```
 
-### 3d. Verify it is running
+### 3d. Check the logs
+
+The agent logs **only startup and push failures** to `/var/log/server-status-agent.log`:
 
 ```bash
-systemctl status server-status-agent
-journalctl -u server-status-agent -f
+sudo tail -f /var/log/server-status-agent.log
 ```
 
-You should see a `pushed ts=<unix seconds>` line every interval. A `push failed …` line
-means the endpoint or token is wrong.
+A fresh start with a healthy endpoint produces a single line:
+
+```
+[2026-10-12T13:42:01Z] INFO started host=vps-1 endpoint=http://127.0.0.1:8099/ingest interval=60s scan_interval=43200s
+```
+
+If the endpoint is unreachable you get **one** `ERROR push failed: …` line when it starts
+failing (not one per interval), and one `INFO push recovered …` line when it succeeds
+again. Rotation is handled by the logrotate config (weekly, 4 kept, compressed).
 
 ### 3e. Verify the disk-scan capability
 
@@ -172,8 +180,9 @@ ENDPOINT=http://127.0.0.1:8099/ingest \
 ./server-status-agent --once
 ```
 
-A successful push prints `pushed ts=…` and exits. This is the same request the agent makes
-on every normal interval, so if this works, the agent is wired up correctly.
+A successful push produces **no output** and exits with status 0 — only startup and
+failures are logged. This is the same request the agent makes on every normal interval, so
+if this works, the agent is wired up correctly.
 
 ### 4c. Test against a throwaway local endpoint
 

@@ -56,6 +56,7 @@ sudo systemctl restart server-status-agent
 
 ```bash
 sudo install -m 0644 deploy/server-status-agent.service /etc/systemd/system/
+sudo install -m 0644 deploy/logrotate-server-status-agent /etc/logrotate.d/server-status-agent
 sudo systemctl daemon-reload
 sudo systemctl enable --now server-status-agent
 ```
@@ -71,11 +72,21 @@ Both should list `CAP_DAC_READ_SEARCH`. If they do not, ensure the unit does **n
 set `NoNewPrivileges=yes` (which can strip ambient capabilities), then
 `sudo systemctl restart server-status-agent`.
 
-## 6. Verify the push
+## 6. Check the logs
+
+The agent logs only startup and push failures, appended to
+`/var/log/server-status-agent.log`:
 
 ```bash
-journalctl -u server-status-agent -f
+sudo tail -f /var/log/server-status-agent.log
 ```
 
-You should see `pushed ts=<unix seconds>` each interval, or a `push failed` line with the
-reason.
+A healthy start logs one line:
+
+```
+[2026-10-12T13:42:01Z] INFO started host=vps-1 endpoint=http://127.0.0.1:8099/ingest interval=60s scan_interval=43200s
+```
+
+If the endpoint is unreachable you get one `ERROR push failed: …` line when it starts
+failing, and one `INFO push recovered …` line when it succeeds again. Rotation is handled
+by `/etc/logrotate.d/server-status-agent`.

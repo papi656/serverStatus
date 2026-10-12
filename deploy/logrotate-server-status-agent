@@ -1,0 +1,9 @@
+/var/log/server-status-agent.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

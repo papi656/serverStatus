@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use server_status_agent::collect::Collector;
 use server_status_agent::config::Config;
-use server_status_agent::{diskscan, push};
+use server_status_agent::{diskscan, log, push};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -13,10 +13,15 @@ fn main() {
     let config = match Config::from_env() {
         Ok(config) => config,
         Err(err) => {
-            eprintln!("config error: {err}");
+            log::error(&format!("config error: {err}"));
             std::process::exit(2);
         }
     };
+
+    log::info(&format!(
+        "started host={} endpoint={} interval={}s scan_interval={}s",
+        config.hostname, config.endpoint, config.interval_secs, config.disk_scan_interval_secs
+    ));
 
     let mut collector = Collector::new();
     let mut disk_space = diskscan::scan(
@@ -28,6 +33,11 @@ fn main() {
 
     // Establish a baseline so the first CPU/process reading is meaningful.
     sleep(Duration::from_secs(1));
+
+    // Push failures are logged once when they start and once when they stop, so a long
+    // outage produces two lines rather than one per interval.
+    let mut failing = false;
+    let mut failed_attempts: u64 = 0;
 
     loop {
         if Instant::now() >= next_scan {
@@ -44,12 +54,26 @@ fn main() {
         if dry_run {
             match serde_json::to_string_pretty(&snapshot) {
                 Ok(json) => println!("{json}"),
-                Err(err) => eprintln!("serialize error: {err}"),
+                Err(err) => log::error(&format!("serialize error: {err}")),
             }
         } else {
             match push::push(&config.endpoint, &config.token, &snapshot) {
-                Ok(()) => eprintln!("pushed ts={}", snapshot.ts),
-                Err(err) => eprintln!("push failed: {err}"),
+                Ok(()) => {
+                    if failing {
+                        log::info(&format!(
+                            "push recovered after {failed_attempts} failed attempt(s)"
+                        ));
+                        failing = false;
+                        failed_attempts = 0;
+                    }
+                }
+                Err(err) => {
+                    failed_attempts += 1;
+                    if !failing {
+                        log::error(&format!("push failed: {err}"));
+                        failing = true;
+                    }
+                }
             }
         }
 
